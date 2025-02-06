@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
+    <color name="kiss_text_on_dark">@android:color/system_accent2_100</color>
+    <color name="kiss_text_on_semi_dark">@android:color/system_accent2_100</color>
+    <color name="kiss_text_on_light">@android:color/system_accent2_900</color>
+    <color name="kiss_text_on_semi_light">@android:color/system_accent2_900</color>
+    <color name="kiss_background">@android:color/system_neutral1_100</color>
+    <color name="kiss_list_background_inverse">@android:color/system_neutral1_900</color>
+    <color name="kiss_divider_light">@android:color/system_accent3_400</color>
+    <color name="kiss_divider_dark">@android:color/system_accent3_600</color>
     <style name="OverlayAccentSystem" parent="OverlayAccentDefault">
         <item name="android:colorAccent">@android:color/system_accent1_100</item>
         <item name="android:colorPrimary">@android:color/system_accent1_700</item>

@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
@@ -254,7 +255,11 @@ public class IconsHandler {
             }
         } else if (DrawableUtils.isAdaptiveIconDrawable(drawable) || mForceAdaptive) {
             // use adaptive shape (with white background for non adaptive icons)
-            return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Color.WHITE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Resources.getSystem().getColor(android.R.color.system_accent1_700));
+            } else {
+                return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Color.BLACK);
+            }
         } else if (mForceShape) {
             // use adaptive shape
             return mSystemPack.applyBackgroundAndMask(ctx, drawable, false, Color.TRANSPARENT);
