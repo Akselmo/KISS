@@ -22,7 +22,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
-import android.widget.ListAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -55,7 +54,8 @@ import fr.neamar.kiss.pojo.ShortcutPojo;
 import fr.neamar.kiss.pojo.TagDummyPojo;
 import fr.neamar.kiss.searcher.QueryInterface;
 import fr.neamar.kiss.ui.ListPopup;
-import fr.neamar.kiss.utils.FuzzyScore;
+import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
+import fr.neamar.kiss.utils.fuzzy.MatchInfo;
 
 public abstract class Result<T extends Pojo> {
 
@@ -135,7 +135,7 @@ public abstract class Result<T extends Pojo> {
 
     boolean displayHighlighted(StringNormalizer.Result normalized, String text, FuzzyScore fuzzyScore,
                                TextView view, Context context) {
-        FuzzyScore.MatchInfo matchInfo = fuzzyScore.match(normalized.codePoints);
+        MatchInfo matchInfo = fuzzyScore.match(normalized.codePoints);
 
         if (!matchInfo.match) {
             view.setText(text);
@@ -488,12 +488,13 @@ public abstract class Result<T extends Pojo> {
         return prefs.getBoolean("subicon-visible", true);
     }
 
-    protected void setSourceBounds(Intent intent, View view) {
+    protected void setSourceBounds(@NonNull Intent intent, @Nullable View view) {
         intent.setSourceBounds(getViewBounds(view));
     }
 
-    protected Rect getViewBounds(View view) {
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+    @Nullable
+    protected Rect getViewBounds(@Nullable View view) {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && view != null) {
             return view.getClipBounds();
         }
         return null;

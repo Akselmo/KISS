@@ -34,7 +34,7 @@ import fr.neamar.kiss.searcher.QueryInterface;
 import fr.neamar.kiss.ui.ImprovedQuickContactBadge;
 import fr.neamar.kiss.ui.ListPopup;
 import fr.neamar.kiss.ui.ShapedContactBadge;
-import fr.neamar.kiss.utils.FuzzyScore;
+import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
 import fr.neamar.kiss.utils.MimeTypeUtils;
 import fr.neamar.kiss.utils.PackageManagerUtils;
 import fr.neamar.kiss.utils.UserHandle;
@@ -100,9 +100,11 @@ public class ContactsResult extends CallResult<ContactsPojo> {
             contactIcon.setImageDrawable(null);
         }
 
-        contactIcon.assignContactUri(Uri.withAppendedPath(
-                ContactsContract.Contacts.CONTENT_LOOKUP_URI,
-                String.valueOf(pojo.lookupKey)));
+        Uri contactUri = ContactsContract.Contacts.CONTENT_LOOKUP_URI;
+        contactUri = Uri.withAppendedPath(contactUri, String.valueOf(pojo.lookupKey));
+        contactUri = Uri.withAppendedPath(contactUri, String.valueOf(pojo.getContactId()));
+        contactIcon.assignContactUri(contactUri);
+
         contactIcon.setExtraOnClickListener(v -> recordLaunch(v.getContext(), queryInterface));
 
         int primaryColor = UIColors.getPrimaryColor(context);
@@ -283,8 +285,11 @@ public class ContactsResult extends CallResult<ContactsPojo> {
     private void launchContactView(Context context, View v) {
         Intent viewContact = new Intent(Intent.ACTION_VIEW);
 
-        viewContact.setData(Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_LOOKUP_URI,
-                String.valueOf(pojo.lookupKey)));
+        Uri contactUri = ContactsContract.Contacts.CONTENT_LOOKUP_URI;
+        contactUri = Uri.withAppendedPath(contactUri, String.valueOf(pojo.lookupKey));
+        contactUri = Uri.withAppendedPath(contactUri, String.valueOf(pojo.getContactId()));
+
+        viewContact.setData(contactUri);
         setSourceBounds(viewContact, v);
         viewContact.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         viewContact.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);

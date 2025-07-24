@@ -6,10 +6,12 @@ import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.PorterDuff;
 import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
@@ -67,6 +69,12 @@ public class InterfaceTweaks extends Forwarder {
             case "medium":
                 act.getTheme().applyStyle(R.style.OverlayResultSizeMedium, true);
                 break;
+            case "large":
+                act.getTheme().applyStyle(R.style.OverlayResultSizeLarge, true);
+                break;
+            case "largest":
+                act.getTheme().applyStyle(R.style.OverlayResultSizeLargest, true);
+                break;
             case "default":
             default:
                 act.getTheme().applyStyle(R.style.OverlayResultSizeStandard, true);
@@ -75,6 +83,18 @@ public class InterfaceTweaks extends Forwarder {
 
         if (prefs.getBoolean("icons-hide", false)) {
             act.getTheme().applyStyle(R.style.OverlayResultSizeNoIcons, true);
+        }
+
+        applySystemBarInsets(act.getWindow().getDecorView());
+    }
+
+    public static void applySystemBarInsets(View view) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            view.setOnApplyWindowInsetsListener((v, insets) -> {
+                Insets systemBars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+                v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+                return WindowInsets.CONSUMED;
+            });
         }
     }
 
