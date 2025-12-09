@@ -40,7 +40,7 @@
     <string name="settings_connectivity">Беспроводные подключения и сети</string>
     <string name="settings_battery">Использование аккумулятора</string>
     <string name="menu_wallpaper">Обновление обоев…</string>
-    <string name="application_not_found">Упс... не удалось запустить это приложение.</string>
+    <string name="application_not_found">Упс… не удалось запустить это приложение.</string>
     <string name="history_erased">История стерта.</string>
     <string name="removed_item">Удалено</string>
     <string name="menu_remove">Убрать из истории</string>
@@ -344,7 +344,16 @@
     <string name="contact_mime_types_title">Выберите контакты для отображения</string>
     <string name="menu_widget_settings">Настройки</string>
     <string name="contact_mime_types_summary">Все типы контактов, которые могут отображаться в результатах поиска</string>
-    <string name="shared_text_empty">Упс... текст на самом деле пустой.</string>
+    <string name="shared_text_empty">Упс… текст на самом деле пустой.</string>
     <string name="results_size_largest">Самый большой</string>
     <string name="results_size_large">Большой</string>
+    <string name="menu_private_space">Частное пространство</string>
+    <string name="unlock_private_space">Разблокировать Частное пространство</string>
+    <string name="lock_private_space">Заблокировать Частное пространство</string>
+    <string name="pref_result_highlighting">Выделить результат поиска</string>
+    <string name="pref_result_highlighting_summary">Определяет способ выделения совпадений в результатах</string>
+    <string name="result_highlighting_text_color">Изменить цвет текста</string>
+    <string name="result_highlighting_underline">Подчеркивание</string>
+    <string name="result_highlighting_bold">Жирный шрифт</string>
+    <string name="result_highlighting_italic">Курсив</string>
 </resources>

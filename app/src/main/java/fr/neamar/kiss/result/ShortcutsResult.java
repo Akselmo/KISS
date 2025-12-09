@@ -1,6 +1,5 @@
 package fr.neamar.kiss.result;
 
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
@@ -9,14 +8,11 @@ import android.content.pm.LauncherApps;
 import android.content.pm.ShortcutInfo;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.os.UserManager;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
-import android.widget.MultiAutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,12 +32,11 @@ import fr.neamar.kiss.ui.ListPopup;
 import fr.neamar.kiss.utils.DrawableUtils;
 import fr.neamar.kiss.utils.PackageManagerUtils;
 import fr.neamar.kiss.utils.ShortcutUtil;
-import fr.neamar.kiss.utils.SpaceTokenizer;
 import fr.neamar.kiss.utils.UserHandle;
 import fr.neamar.kiss.utils.Utilities;
 import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
 
-public class ShortcutsResult extends Result<ShortcutPojo> {
+public class ShortcutsResult extends ResultWithTags<ShortcutPojo> {
 
     private static final String TAG = ShortcutsResult.class.getSimpleName();
 
@@ -64,17 +59,8 @@ public class ShortcutsResult extends Result<ShortcutPojo> {
 
         displayHighlighted(pojo.normalizedName, pojo.getName(), fuzzyScore, shortcutName, context);
 
-        TextView tagsView = view.findViewById(R.id.item_app_tag);
-
-        // Hide tags view if tags are empty
-        if (pojo.getTags().isEmpty()) {
-            tagsView.setVisibility(View.GONE);
-        } else if (displayHighlighted(pojo.getNormalizedTags(), pojo.getTags(),
-                fuzzyScore, tagsView, context) || isTagsVisible(context)) {
-            tagsView.setVisibility(View.VISIBLE);
-        } else {
-            tagsView.setVisibility(View.GONE);
-        }
+        TextView tagsView = view.findViewById(R.id.item_shortcut_tag);
+        displayTags(context, fuzzyScore, tagsView);
 
         final ImageView shortcutIcon = view.findViewById(R.id.item_shortcut_icon);
         final ImageView appIcon = view.findViewById(R.id.item_app_icon);
@@ -136,7 +122,7 @@ public class ShortcutsResult extends Result<ShortcutPojo> {
                             Intent intent = Intent.parseUri(pojo.intentUri, 0);
                             ComponentName componentName = PackageManagerUtils.getComponentName(context, intent);
                             if (componentName != null) {
-                                UserHandle userHandle = new UserHandle();
+                                UserHandle userHandle = pojo.getUserHandle();
                                 appDrawable = iconsHandler.getDrawableIconForPackage(PackageManagerUtils.getLaunchingComponent(context, componentName, userHandle), userHandle);
                             }
                         } catch (NullPointerException e) {
@@ -250,15 +236,14 @@ public class ShortcutsResult extends Result<ShortcutPojo> {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private ShortcutInfo getShortCut(Context context) {
-        return ShortcutUtil.getShortCut(context, pojo.packageName, pojo.getOreoId());
+        return ShortcutUtil.getShortCut(context, pojo.getUserHandle().getRealHandle(), pojo.packageName, pojo.getOreoId());
     }
 
     private Drawable getDrawableFromOreoShortcut(Context context) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             ShortcutInfo shortcutInfo = getShortCut(context);
             if (shortcutInfo != null && shortcutInfo.getActivity() != null) {
-                UserManager manager = (UserManager) context.getSystemService(Context.USER_SERVICE);
-                fr.neamar.kiss.utils.UserHandle user = new fr.neamar.kiss.utils.UserHandle(manager.getSerialNumberForUser(shortcutInfo.getUserHandle()), shortcutInfo.getUserHandle());
+                UserHandle user = new UserHandle(context, shortcutInfo.getUserHandle());
                 IconsHandler iconsHandler = KissApplication.getApplication(context).getIconsHandler();
                 return iconsHandler.getDrawableIconForPackage(shortcutInfo.getActivity(), user);
             }
@@ -274,10 +259,10 @@ public class ShortcutsResult extends Result<ShortcutPojo> {
         adapter.add(new ListPopup.Item(context, R.string.menu_favorites_remove));
         adapter.add(new ListPopup.Item(context, R.string.menu_tags_edit));
         adapter.add(new ListPopup.Item(context, R.string.menu_remove));
-        if (!this.pojo.isPinned() && this.pojo.isOreoShortcut()) {
+        if (!this.pojo.isPinned() && this.pojo.isOreoShortcut() && !PackageManagerUtils.isPrivateProfile(context, this.pojo.getUserHandle())) {
             adapter.add(new ListPopup.Item(context, R.string.menu_shortcut_pin));
         }
-        if (this.pojo.isPinned()) {
+        if (this.pojo.isPinned() && !PackageManagerUtils.isPrivateProfile(context, this.pojo.getUserHandle())) {
             adapter.add(new ListPopup.Item(context, R.string.menu_shortcut_remove));
         }
 
@@ -294,52 +279,13 @@ public class ShortcutsResult extends Result<ShortcutPojo> {
             // Also remove item, since it will be uninstalled
             parent.removeResult(context, this);
             return true;
-        } else if (stringId == R.string.menu_tags_edit) {
-            launchEditTagsDialog(context, pojo);
-            return true;
         }
         return super.popupMenuClickHandler(context, parent, stringId, parentView);
     }
 
-    private void launchEditTagsDialog(final Context context, final ShortcutPojo pojo) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle(context.getResources().getString(R.string.tags_add_title));
-
-        // Create the tag dialog
-        final View v = View.inflate(context, R.layout.tags_dialog, null);
-        final MultiAutoCompleteTextView tagInput = v.findViewById(R.id.tag_input);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(context,
-                android.R.layout.simple_dropdown_item_1line, KissApplication.getApplication(context).getDataHandler().getTagsHandler().getAllTagsAsArray());
-        tagInput.setTokenizer(new SpaceTokenizer());
-        tagInput.setText(pojo.getTags());
-
-        tagInput.setAdapter(adapter);
-        builder.setView(v);
-
-        builder.setPositiveButton(android.R.string.ok, (dialog, which) -> {
-            dialog.dismiss();
-            // Refresh tags for given app
-            pojo.setTags(tagInput.getText().toString());
-            KissApplication.getApplication(context).getDataHandler().getTagsHandler().setTags(pojo.id, pojo.getTags());
-            // Show toast message
-            String msg = context.getResources().getString(R.string.tags_confirmation_added);
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
-        });
-        builder.setNegativeButton(android.R.string.cancel, (dialog, which) -> dialog.cancel());
-
-        AlertDialog dialog = builder.create();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
-
-        dialog.show();
-    }
-
     private void launchUninstall(Context context, ShortcutPojo pojo) {
         DataHandler dh = KissApplication.getApplication(context).getDataHandler();
-        if (pojo.isOreoShortcut() && pojo.isPinned()) {
-            dh.unpinShortcut(pojo);
-        } else {
-            dh.removeShortcut(pojo);
-        }
+        dh.unpinShortcut(pojo);
     }
 
     private void pinShortcut(Context context, ShortcutPojo pojo) {

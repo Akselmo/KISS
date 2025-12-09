@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
@@ -19,6 +20,8 @@ import android.database.DataSetObserver;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.text.Editable;
@@ -36,13 +39,13 @@ import android.view.ViewAnimationUtils;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AbsListView;
-import android.widget.AdapterView;
 import android.widget.PopupWindow;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import fr.neamar.kiss.adapter.RecordAdapter;
 import fr.neamar.kiss.broadcast.IncomingCallHandler;
@@ -50,18 +53,14 @@ import fr.neamar.kiss.dataprovider.simpleprovider.SearchProvider;
 import fr.neamar.kiss.forwarder.ForwarderManager;
 import fr.neamar.kiss.pojo.SearchPojo;
 import fr.neamar.kiss.result.Result;
-import fr.neamar.kiss.searcher.ApplicationsSearcher;
-import fr.neamar.kiss.searcher.HistorySearcher;
 import fr.neamar.kiss.searcher.QueryInterface;
-import fr.neamar.kiss.searcher.QuerySearcher;
+import fr.neamar.kiss.searcher.SearchHandler;
 import fr.neamar.kiss.searcher.Searcher;
-import fr.neamar.kiss.searcher.TagsSearcher;
-import fr.neamar.kiss.searcher.UntaggedSearcher;
 import fr.neamar.kiss.ui.AnimatedListView;
-import fr.neamar.kiss.ui.BottomPullEffectView;
 import fr.neamar.kiss.ui.KeyboardScrollHider;
 import fr.neamar.kiss.ui.ListPopup;
 import fr.neamar.kiss.ui.SearchEditText;
+import fr.neamar.kiss.utils.PackageManagerUtils;
 import fr.neamar.kiss.utils.Permission;
 import fr.neamar.kiss.utils.SystemUiVisibilityHelper;
 
@@ -69,7 +68,6 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
 
     public static final String START_LOAD = "fr.neamar.summon.START_LOAD";
     public static final String LOAD_OVER = "fr.neamar.summon.LOAD_OVER";
-    public static final String FULL_LOAD_OVER = "fr.neamar.summon.FULL_LOAD_OVER";
 
     protected static final String TAG = MainActivity.class.getSimpleName();
 
@@ -148,11 +146,6 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
     public View clearButton;
 
     /**
-     * Task launched on text change
-     */
-    private Searcher searchTask;
-
-    /**
      * SystemUiVisibility helper
      */
     private SystemUiVisibilityHelper systemUiVisibilityHelper;
@@ -177,8 +170,6 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         super.onCreate(savedInstanceState);
         Log.d(TAG, "onCreate()");
 
-        KissApplication.getApplication(this).initDataHandler();
-
         /*
          * Initialize preferences
          */
@@ -196,20 +187,23 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
          */
         IntentFilter intentFilterLoad = new IntentFilter(START_LOAD);
         IntentFilter intentFilterLoadOver = new IntentFilter(LOAD_OVER);
-        IntentFilter intentFilterFullLoadOver = new IntentFilter(FULL_LOAD_OVER);
         mReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                //noinspection ConstantConditions
-                if (intent.getAction().equalsIgnoreCase(LOAD_OVER)) {
+                if (LOAD_OVER.equalsIgnoreCase(intent.getAction())) {
                     updateSearchRecords();
-                } else if (intent.getAction().equalsIgnoreCase(FULL_LOAD_OVER)) {
-                    Log.v(TAG, "All providers are done loading.");
+                    if (!KissApplication.getApplication(context).getDataHandler().isAllProvidersLoaded()) {
+                        displayLoader(true);
+                    } else {
+                        Log.v(TAG, "All providers are done loading.");
 
-                    displayLoader(false);
+                        displayLoader(false);
 
-                    // Run GC once to free all the garbage accumulated during provider initialization
-                    System.gc();
+                        // Run GC once to free all the garbage accumulated during provider initialization
+                        System.gc();
+                    }
+                } else if (START_LOAD.equalsIgnoreCase(intent.getAction())) {
+                    displayLoader(true);
                 }
 
                 // New provider might mean new favorites
@@ -224,12 +218,10 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
             // In practice, this means other apps can trigger a refresh of search results if they want by sending a broadcast.
             this.registerReceiver(mReceiver, intentFilterLoad, Context.RECEIVER_EXPORTED);
             this.registerReceiver(mReceiver, intentFilterLoadOver, Context.RECEIVER_EXPORTED);
-            this.registerReceiver(mReceiver, intentFilterFullLoadOver, Context.RECEIVER_EXPORTED);
         }
         else {
             this.registerReceiver(mReceiver, intentFilterLoad);
             this.registerReceiver(mReceiver, intentFilterLoadOver);
-            this.registerReceiver(mReceiver, intentFilterFullLoadOver);
         }
 
         /*
@@ -252,8 +244,11 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         /*
          * Initialize components behavior
          * Note that a lot of behaviors are also initialized through the forwarderManager.onCreate() call.
+         * {@code initDataHandler} must be called after {@link MainActivity#displayLoader(boolean)} and after {@link MainActivity#mReceiver} is registered.
+         * If {@code dataHandler} is already existing at this point this may result in undefined behaviour.
          */
         displayLoader(true);
+        KissApplication.getApplication(this).initDataHandler();
 
         // Add touch listener for history popup to root view
         findViewById(android.R.id.content).setOnTouchListener(this);
@@ -271,12 +266,9 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         this.list.setOnItemClickListener((parent, v, position, id) -> adapter.onClick(position, v));
 
         this.list.setLongClickable(true);
-        this.list.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
-            @Override
-            public boolean onItemLongClick(AdapterView<?> parent, View v, int pos, long id) {
-                ((RecordAdapter) parent.getAdapter()).onLongClick(pos, v);
-                return true;
-            }
+        this.list.setOnItemLongClickListener((parent, v, pos, id) -> {
+            ((RecordAdapter) parent.getAdapter()).onLongClick(pos, v);
+            return true;
         });
 
         // Display empty list view when having no results
@@ -384,7 +376,7 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         // Hide the keyboard.
         this.hider = new KeyboardScrollHider(this,
                 this.list,
-                (BottomPullEffectView) this.findViewById(R.id.listEdgeEffect)
+                this.findViewById(R.id.listEdgeEffect)
         );
         this.hider.start();
 
@@ -412,11 +404,24 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         super.onCreateContextMenu(menu, v, menuInfo);
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.menu_main, menu);
+
+        MenuItem privateSpaceItem = menu.findItem(R.id.private_space);
+        if (privateSpaceItem != null) {
+            UserHandle privateUser = getPrivateUser();
+            if (privateUser == null) {
+                privateSpaceItem.setVisible(false);
+            } else if (isPrivateSpaceUnlocked(privateUser)) {
+                privateSpaceItem.setTitle(R.string.lock_private_space);
+            } else {
+                privateSpaceItem.setTitle(R.string.unlock_private_space);
+            }
+        }
+
         forwarderManager.onCreateContextMenu(menu);
     }
 
     @Override
-    public boolean onContextItemSelected(MenuItem item) {
+    public boolean onContextItemSelected(@NonNull MenuItem item) {
         return onOptionsItemSelected(item);
     }
 
@@ -446,14 +451,14 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
 
         dismissPopup();
 
-        if (KissApplication.getApplication(this).getDataHandler().allProvidersHaveLoaded) {
+        if (KissApplication.getApplication(this).getDataHandler().isAllProvidersLoaded()) {
             displayLoader(false);
             onFavoriteChange();
         }
 
         // We need to update the history in case an external event created new items
         // (for instance, installed a new app, got a phone call or simply clicked on a favorite)
-        updateSearchRecords();
+        updateSearchRecords(false, searchEditText.getText().toString());
         displayClearOnInput();
 
         if (isViewingAllApps()) {
@@ -565,7 +570,7 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (forwarderManager.onOptionsItemSelected(item)) {
             return true;
         }
@@ -582,6 +587,9 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         } else if (itemId == R.id.preferences) {
             startActivity(new Intent(this, SettingsActivity.class));
             return true;
+        } else if (itemId == R.id.private_space) {
+            switchPrivateSpaceState();
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -591,7 +599,6 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         super.onCreateOptionsMenu(menu);
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.menu_main, menu);
-
         return true;
     }
 
@@ -714,6 +721,40 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
         }
     }
 
+    private UserHandle getPrivateUser() {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            final LauncherApps launcher = (LauncherApps) this.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            assert launcher != null;
+
+            List<UserHandle> users = launcher.getProfiles();
+
+            for (UserHandle user : users) {
+                if (PackageManagerUtils.isPrivateProfile(launcher, user)) {
+                    return user;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isPrivateSpaceUnlocked(UserHandle privateUser) {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            final UserManager manager = (UserManager) this.getSystemService(Context.USER_SERVICE);
+            return !manager.isQuietModeEnabled(privateUser);
+        }
+        return false;
+    }
+
+    private void switchPrivateSpaceState() {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            UserHandle user = getPrivateUser();
+            if (user != null) {
+                final UserManager manager = (UserManager) this.getSystemService(Context.USER_SERVICE);
+                manager.requestQuietModeEnabled(!manager.isQuietModeEnabled(user), user);
+            }
+        }
+    }
+
     public void onFavoriteChange() {
         forwarderManager.onFavoriteChange();
     }
@@ -737,12 +778,12 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
             if (!TextUtils.isEmpty(searchEditText.getText())) {
                 clearSearchText();
             }
-            resetTask();
+            cancelSearch();
 
             // Needs to be done after setting the text content to empty
             isDisplayingKissBar = true;
 
-            runTask(new ApplicationsSearcher(MainActivity.this, false));
+            updateSearchRecords(false, searchEditText.getText().toString());
 
             // Reveal the bar
             if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -809,35 +850,30 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
      * @param query     the query on which to search
      */
     protected void updateSearchRecords(boolean isRefresh, String query) {
-        resetTask();
+        cancelSearch();
         dismissPopup();
 
-        if (isRefresh && isViewingAllApps()) {
-            // Refreshing while viewing all apps (for instance app installed or uninstalled in the background)
-            runTask(new ApplicationsSearcher(this, isRefresh));
+        if (isRefresh) {
+            // Refreshing (for instance app installed or uninstalled in the background, profile unlocked, ...)
+            search(Searcher.Type.APPLICATION, query, true);
             return;
         }
 
-        forwarderManager.updateSearchRecords(isRefresh, query);
+        forwarderManager.updateSearchRecords(query);
 
-        if (query.isEmpty()) {
+        if (TextUtils.isEmpty(query)) {
             systemUiVisibilityHelper.resetScroll();
         } else {
-            runTask(new QuerySearcher(this, query, isRefresh));
+            search(Searcher.Type.QUERY, query, false);
         }
     }
 
-    public void runTask(Searcher task) {
-        resetTask();
-        searchTask = task;
-        searchTask.executeOnExecutor(Searcher.SEARCH_THREAD);
+    public void search(@NonNull Searcher.Type type, String query, boolean isRefresh) {
+        SearchHandler.getInstance().search(type, this, query, isRefresh);
     }
 
-    public void resetTask() {
-        if (searchTask != null) {
-            searchTask.cancel(true);
-            searchTask = null;
-        }
+    private void cancelSearch() {
+        SearchHandler.getInstance().cancelSearch();
     }
 
     /**
@@ -992,21 +1028,21 @@ public class MainActivity extends Activity implements QueryInterface, KeyboardSc
     }
 
     public void showMatchingTags(String tag) {
-        runTask(new TagsSearcher(this, tag));
+        search(Searcher.Type.TAGGED, tag, false);
 
         clearButton.setVisibility(View.VISIBLE);
         menuButton.setVisibility(View.INVISIBLE);
     }
 
     public void showUntagged() {
-        runTask(new UntaggedSearcher(this));
+        search(Searcher.Type.UNTAGGED, null, false);
 
         clearButton.setVisibility(View.VISIBLE);
         menuButton.setVisibility(View.INVISIBLE);
     }
 
     public void showHistory() {
-        runTask(new HistorySearcher(this, false));
+        search(Searcher.Type.HISTORY, null, false);
 
         clearButton.setVisibility(View.VISIBLE);
         menuButton.setVisibility(View.INVISIBLE);

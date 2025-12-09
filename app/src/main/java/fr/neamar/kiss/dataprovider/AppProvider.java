@@ -6,7 +6,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.LauncherApps;
 import android.os.Build;
-import android.os.UserManager;
 import android.preference.PreferenceManager;
 
 import java.util.ArrayList;
@@ -19,9 +18,9 @@ import fr.neamar.kiss.loader.LoadAppPojos;
 import fr.neamar.kiss.normalizer.StringNormalizer;
 import fr.neamar.kiss.pojo.AppPojo;
 import fr.neamar.kiss.searcher.Searcher;
+import fr.neamar.kiss.utils.UserHandle;
 import fr.neamar.kiss.utils.fuzzy.FuzzyFactory;
 import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
-import fr.neamar.kiss.utils.UserHandle;
 import fr.neamar.kiss.utils.fuzzy.MatchInfo;
 
 public class AppProvider extends Provider<AppPojo> {
@@ -29,9 +28,6 @@ public class AppProvider extends Provider<AppPojo> {
     @Override
     public void onCreate() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            final UserManager manager = (UserManager) this.getSystemService(Context.USER_SERVICE);
-            assert manager != null;
-
             final LauncherApps launcher = (LauncherApps) this.getSystemService(Context.LAUNCHER_APPS_SERVICE);
             assert launcher != null;
 
@@ -78,7 +74,7 @@ public class AppProvider extends Provider<AppPojo> {
                 private void handleEvent(String action, String[] packageNames, android.os.UserHandle user, boolean replacing) {
                     PackageAddedRemovedHandler.handleEvent(AppProvider.this,
                             action,
-                            packageNames, new UserHandle(manager.getSerialNumberForUser(user), user), replacing
+                            packageNames, new UserHandle(AppProvider.this, user), replacing
                     );
                 }
             });
@@ -121,15 +117,15 @@ public class AppProvider extends Provider<AppPojo> {
 
     @Override
     public void requestResults(String query, Searcher searcher) {
-        Set<String> excludedFavoriteIds = KissApplication.getApplication(this).getDataHandler().getExcludedFavorites();
-
         StringNormalizer.Result queryNormalized = StringNormalizer.normalizeWithResult(query, false);
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         if (queryNormalized.codePoints.length == 0) {
             return;
         }
 
         FuzzyScore fuzzyScore = FuzzyFactory.createFuzzyScore(this, queryNormalized.codePoints);
+
+        Set<String> excludedFavoriteIds = KissApplication.getApplication(this).getDataHandler().getExcludedFavorites();
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         for (AppPojo pojo : getPojos()) {
             // exclude apps from results

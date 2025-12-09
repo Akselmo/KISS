@@ -342,7 +342,16 @@
     <string name="contact_mime_types_title">Vali näidatavad kontaktid</string>
     <string name="contact_mime_types_summary">Eri tüüpi kontaktid, mida soovid kuvada otsingutulemustes</string>
     <string name="menu_widget_settings">Seadistused</string>
-    <string name="shared_text_empty">Ups... tekst on tegelikult tühi.</string>
+    <string name="shared_text_empty">Ups… tekst on tegelikult tühi.</string>
     <string name="results_size_largest">Suurim</string>
     <string name="results_size_large">Suur</string>
+    <string name="menu_private_space">Privaatne ruum</string>
+    <string name="unlock_private_space">Ava privaatne ruum</string>
+    <string name="lock_private_space">Lukusta privaatne ruum</string>
+    <string name="pref_result_highlighting">Tõsta otsingutulemus esile</string>
+    <string name="pref_result_highlighting_summary">Määratleb, kuidas otsinguvasted on tulemustes esiletõstetud.</string>
+    <string name="result_highlighting_text_color">Muuda teksti värvi</string>
+    <string name="result_highlighting_underline">Allajoonitud</string>
+    <string name="result_highlighting_bold">Paks kiri</string>
+    <string name="result_highlighting_italic">Kaldkiri</string>
 </resources>

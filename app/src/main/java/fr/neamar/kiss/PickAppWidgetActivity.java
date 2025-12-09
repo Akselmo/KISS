@@ -137,6 +137,9 @@ public class PickAppWidgetActivity extends Activity {
                 if (label == null) {
                     label = providerInfo.label;
                 }
+                if (label == null) {
+                    label = providerInfo.provider.flattenToShortString();
+                }
 
                 // get widget description
                 String description = null;
@@ -210,7 +213,7 @@ public class PickAppWidgetActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             userHandle = new UserHandle(context, info.getProfile());
         } else
-            userHandle = new UserHandle();
+            userHandle = UserHandle.OWNER;
         return KissApplication.getApplication(context).getIconsHandler().getDrawableIconForPackage(info.provider, userHandle);
     }
 

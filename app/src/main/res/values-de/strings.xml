@@ -105,7 +105,7 @@
     <string name="settings_accessibility">Bedienungshilfen</string>
     <string name="settings_sound">Klang und Lautstärke</string>
     <string name="settings_display">Bildschirm</string>
-    <string name="ui_item_visit">„%1$s“ öffnen</string>
+    <string name="ui_item_visit">„%1$s“ besuchen</string>
     <string name="menu_tags_edit">Stichworte hinzufügen/bearbeiten</string>
     <string name="tags_add_title">Leerzeichen-getrennte Stichworte hinzufügen</string>
     <string name="tags_confirmation_added">Stichworte gesetzt</string>
@@ -311,7 +311,7 @@
     <string name="shape_teardrop_random">Tränenförmig zufällig</string>
     <string name="shape_teardrop_top_left">Tränenförmig oben-links</string>
     <string name="shape_teardrop_bottom_right">Tränenförmig unten-rechts</string>
-    <string name="ui_item_open"> “%1$s” öffnen</string>
+    <string name="ui_item_open">„%1$s“ öffnen</string>
     <string name="excluded_apps_toggle">Zeige ausgeblendete Apps in der Suche</string>
     <string name="gesture_launch_pojo">Starte…</string>
     <string name="contact_mime_types_title">Anzuzeigende Kontakte auswählen</string>
@@ -327,7 +327,7 @@
     <string name="search_provider_error_uri_cannot_be_handle">Die angegebene URI kann von keiner Anwendung auf Ihrem Gerät verarbeitet werden.</string>
     <string name="export_settings_done">Die Einstellungen wurden in die Zwischenablage exportiert.</string>
     <string name="export_settings_error">Die Einstellungen können nicht exportiert werden.</string>
-    <string name="import_settings_version_missing">Einstellungen können nicht importiert werden, da keine gültige Version gefunden wurde.</string>
+    <string name="import_settings_version_missing">Einstellungen können nicht importiert werden. Keine gültige Versionszeichenfolge gefunden.</string>
     <string name="import_settings_upgrade_kiss">Bitte aktualisieren Sie Ihre KISS-Version, bevor Sie diese Einstellungen importieren..</string>
     <string name="import_settings_save_not_possible">Einstellungen können nicht gespeichert werden.</string>
     <string name="import_settings_done">Einstellungen importiert.</string>
@@ -343,4 +343,17 @@
     <string name="tagged_result_sort_mode_name">Sortiermodus für Ergebnisse mit Stichworten</string>
     <string name="tagged_result_sort_mode_default">Standard, wie Sortiermodus</string>
     <string name="tagged_result_sort_mode_desc">Wählen Sie aus, wie die Ergebnisse sortiert werden sollen, wenn sie nach Stichworten angezeigt werden</string>
+    <string name="unlock_private_space">Vertrauliches Profil entsperren</string>
+    <string name="lock_private_space">Vertrauliches Profil sperren</string>
+    <string name="shared_text_empty">Ups… der Text ist leer.</string>
+    <string name="menu_private_space">Vertrauliches Profil</string>
+    <string name="results_size_largest">Größer</string>
+    <string name="results_size_large">Groß</string>
+    <string name="history_time">Zur Tageszeit verwendete zuerst</string>
+    <string name="pref_result_highlighting">Suchergebnis hervorheben</string>
+    <string name="pref_result_highlighting_summary">Legt fest, wie Treffer in den Suchergebnissen hervorgehoben werden.</string>
+    <string name="result_highlighting_text_color">Textfarbe ändern</string>
+    <string name="result_highlighting_underline">Unterstreichen</string>
+    <string name="result_highlighting_bold">Fett</string>
+    <string name="result_highlighting_italic">Kursiv</string>
 </resources>

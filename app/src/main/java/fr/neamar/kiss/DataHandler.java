@@ -9,10 +9,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.pm.LauncherApps;
 import android.content.pm.ShortcutInfo;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.UserManager;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import fr.neamar.kiss.broadcast.ProfileChangedHandler;
 import fr.neamar.kiss.dataprovider.AppProvider;
@@ -54,8 +57,7 @@ import fr.neamar.kiss.utils.PackageManagerUtils;
 import fr.neamar.kiss.utils.ShortcutUtil;
 import fr.neamar.kiss.utils.UserHandle;
 
-public class DataHandler extends BroadcastReceiver
-        implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class DataHandler implements SharedPreferences.OnSharedPreferenceChangeListener {
     protected static final String TAG = DataHandler.class.getSimpleName();
 
     /**
@@ -79,8 +81,6 @@ public class DataHandler extends BroadcastReceiver
     final private Context context;
     private String currentQuery;
     private final Map<String, ProviderEntry> providers = new HashMap<>();
-    public boolean allProvidersHaveLoaded = false;
-    private long start;
 
     /**
      * Initialize all providers
@@ -92,18 +92,8 @@ public class DataHandler extends BroadcastReceiver
         //  to bind to services)
         this.context = context.getApplicationContext();
 
-        start = System.currentTimeMillis();
-
-        IntentFilter intentFilter = new IntentFilter(MainActivity.LOAD_OVER);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            this.context.getApplicationContext().registerReceiver(this, intentFilter, Context.RECEIVER_EXPORTED);
-        }
-        else {
-            this.context.getApplicationContext().registerReceiver(this, intentFilter);
-        }
-
-        Intent i = new Intent(MainActivity.START_LOAD);
-        this.context.sendBroadcast(i);
+        Intent startLoad = new Intent(MainActivity.START_LOAD);
+        this.context.sendBroadcast(startLoad);
 
         // Monitor changes for profiles
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -144,6 +134,10 @@ public class DataHandler extends BroadcastReceiver
         ProviderEntry tagsEntry = new ProviderEntry();
         tagsEntry.provider = new TagsProvider();
         this.providers.put("tags", tagsEntry);
+
+        // Some basic providers already loaded! We need to fire the LOAD_OVER event.
+        Intent loadOver = new Intent(MainActivity.LOAD_OVER);
+        this.context.sendBroadcast(loadOver);
     }
 
     @Override
@@ -252,7 +246,9 @@ public class DataHandler extends BroadcastReceiver
             return;
         }
 
+        // Add empty provider object to list of providers
         final ProviderEntry entry = new ProviderEntry();
+        this.providers.put(name, entry);
 
         // Connect and bind to provider service
         this.context.bindService(intent, new ServiceConnection() {
@@ -260,24 +256,16 @@ public class DataHandler extends BroadcastReceiver
             public void onServiceConnected(ComponentName className, IBinder service) {
                 // We've bound to LocalService, cast the IBinder and get LocalService instance
                 Provider<?>.LocalBinder binder = (Provider<?>.LocalBinder) service;
-                IProvider<?> provider = binder.getService();
 
                 // Update provider info so that it contains something useful
-                entry.provider = provider;
+                entry.provider = binder.getService();
                 entry.connection = this;
-
-                if (provider.isLoaded()) {
-                    handleProviderLoaded();
-                }
             }
 
             @Override
             public void onServiceDisconnected(ComponentName name) {
             }
         }, Context.BIND_AUTO_CREATE);
-
-        // Add empty provider object to list of providers
-        this.providers.put(name, entry);
     }
 
     /**
@@ -286,8 +274,10 @@ public class DataHandler extends BroadcastReceiver
      * @param name Data provider name (i.e.: `AppProvider` → `"app"`)
      */
     private void disconnectFromProvider(String name) {
+        // Remove provider from list
+        ProviderEntry entry = this.providers.remove(name);
+
         // Skip already disconnected services
-        ProviderEntry entry = this.providers.get(name);
         if (entry == null) {
             return;
         }
@@ -302,45 +292,18 @@ public class DataHandler extends BroadcastReceiver
             this.context.stopService(new Intent(this.context, entry.provider.getClass()));
         }
 
-        // Remove provider from list
-        this.providers.remove(name);
+        // Providers changed! We need to fire the LOAD_OVER event.
+        Intent loadOver = new Intent(MainActivity.LOAD_OVER);
+        this.context.sendBroadcast(loadOver);
     }
 
-    /**
-     * Called when some event occurred that makes us believe that all data providers
-     * might be ready now
-     */
-    protected void handleProviderLoaded() {
-        if (this.allProvidersHaveLoaded) {
-            return;
-        }
-
-        // Make sure that all providers are fully connected
+    public boolean isAllProvidersLoaded() {
         for (ProviderEntry entry : this.providers.values()) {
             if (entry.provider == null || !entry.provider.isLoaded()) {
-                return;
+                return false;
             }
         }
-
-        long time = System.currentTimeMillis() - start;
-        Log.v(TAG, "Time to load all providers: " + time + "ms");
-
-        this.allProvidersHaveLoaded = true;
-
-        // Broadcast the fact that the new providers list is ready
-        try {
-            this.context.unregisterReceiver(this);
-            Intent i = new Intent(MainActivity.FULL_LOAD_OVER);
-            this.context.sendBroadcast(i);
-        } catch (IllegalArgumentException e) {
-            Log.e(TAG, "Unable to send broadcast: " + MainActivity.FULL_LOAD_OVER);
-        }
-    }
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        // A provider finished loading and contacted us
-        this.handleProviderLoaded();
+        return true;
     }
 
     /**
@@ -494,7 +457,7 @@ public class DataHandler extends BroadcastReceiver
      *
      * @param shortcut shortcut to be removed
      */
-    public void removeShortcut(ShortcutPojo shortcut) {
+    private void removeShortcut(ShortcutPojo shortcut) {
         boolean shortcutUpdated = removeShortcut(shortcut.id, shortcut.packageName, shortcut.intentUri);
         if (shortcutUpdated) {
             reloadShortcuts();
@@ -510,8 +473,24 @@ public class DataHandler extends BroadcastReceiver
      */
     public boolean pinShortcut(ShortcutPojo shortcut) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (!shortcut.isPinned() && shortcut.isOreoShortcut()) {
-                return ShortcutUtil.pinShortcut(this.context, shortcut.packageName, shortcut.getOreoId());
+            LauncherApps launcherApps = (LauncherApps) context.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (shortcut.isOreoShortcut() &&
+                    launcherApps.hasShortcutHostPermission() &&
+                    !PackageManagerUtils.isPrivateProfile(launcherApps, shortcut.getUserHandle().getRealHandle())) {
+                ShortcutInfo shortcutToPin = ShortcutUtil.getShortCut(context, shortcut.getUserHandle().getRealHandle(), shortcut.packageName, shortcut.getOreoId());
+                if (shortcutToPin != null) {
+                    List<ShortcutInfo> shortcutInfos = ShortcutUtil.getShortcuts(context, shortcut.packageName);
+                    List<String> pinnedShortcutIds = shortcutInfos.stream()
+                            .filter(ShortcutInfo::isPinned)
+                            .filter(shortcutInfo -> shortcutInfo.getUserHandle().equals(shortcutToPin.getUserHandle()))
+                            .map(ShortcutInfo::getId)
+                            .collect(Collectors.toList());
+                    pinnedShortcutIds.add(shortcutToPin.getId());
+
+                    launcherApps.pinShortcuts(shortcut.packageName, pinnedShortcutIds, shortcutToPin.getUserHandle());
+                    updateShortcut(shortcutToPin, false);
+                    return true;
+                }
             }
         }
         return false;
@@ -525,9 +504,24 @@ public class DataHandler extends BroadcastReceiver
      * @return true, if shortcut was unpinned
      */
     public boolean unpinShortcut(ShortcutPojo shortcut) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (shortcut.isPinned() && shortcut.isOreoShortcut()) {
-                if (ShortcutUtil.unpinShortcut(this.context, shortcut.packageName, shortcut.getOreoId())) {
+        if (!shortcut.isOreoShortcut()) {
+            removeShortcut(shortcut);
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            LauncherApps launcherApps = (LauncherApps) context.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (shortcut.isOreoShortcut() &&
+                    launcherApps.hasShortcutHostPermission() &&
+                    !PackageManagerUtils.isPrivateProfile(launcherApps, shortcut.getUserHandle().getRealHandle())) {
+                ShortcutInfo shortcutToUnpin = ShortcutUtil.getShortCut(context, shortcut.getUserHandle().getRealHandle(), shortcut.packageName, shortcut.getOreoId());
+                if (shortcutToUnpin != null) {
+                    List<ShortcutInfo> shortcutInfos = ShortcutUtil.getShortcuts(context, shortcut.packageName);
+                    List<String> pinnedShortcutIds = shortcutInfos.stream()
+                            .filter(ShortcutInfo::isPinned)
+                            .filter(shortcutInfo -> shortcutInfo.getUserHandle().equals(shortcutToUnpin.getUserHandle()))
+                            .map(ShortcutInfo::getId)
+                            .collect(Collectors.toList());
+                    pinnedShortcutIds.remove(shortcutToUnpin.getId());
+
+                    launcherApps.pinShortcuts(shortcut.packageName, pinnedShortcutIds, shortcutToUnpin.getUserHandle());
                     removeShortcut(shortcut.id, shortcut.packageName, shortcut.intentUri);
                     return true;
                 }
@@ -560,7 +554,7 @@ public class DataHandler extends BroadcastReceiver
             return DBHelper.insertShortcut(this.context, shortcutRecord);
         } else {
             Log.d(TAG, "Removing shortcut for " + shortcutRecord.packageName);
-            String id = ShortcutUtil.generateShortcutId(shortcutRecord);
+            String id = ShortcutUtil.generateShortcutId(new UserHandle(context, shortcutInfo.getUserHandle()), shortcutRecord);
             return removeShortcut(id, shortcutRecord.packageName, shortcutRecord.intentUri);
         }
     }
@@ -593,7 +587,12 @@ public class DataHandler extends BroadcastReceiver
         // Remove all shortcuts from favorites for given package name
         List<ShortcutRecord> shortcutsList = DBHelper.getShortcuts(context, packageName);
         for (ShortcutRecord shortcutRecord : shortcutsList) {
-            String id = ShortcutUtil.generateShortcutId(shortcutRecord);
+            UserManager manager = (UserManager) context.getSystemService(Context.USER_SERVICE);
+            for (android.os.UserHandle user : manager.getUserProfiles()) {
+                String id = ShortcutUtil.generateShortcutId(new UserHandle(context, user), shortcutRecord);
+                removeFromFavorites(id);
+            }
+            String id = ShortcutUtil.generateShortcutId(null, shortcutRecord);
             removeFromFavorites(id);
         }
 
@@ -609,7 +608,7 @@ public class DataHandler extends BroadcastReceiver
             return new HashSet<>(excluded);
         } else {
             Set<String> defaultExcluded = new HashSet<>(1);
-            defaultExcluded.add("app://" + AppPojo.getComponentName(context.getPackageName(), MainActivity.class.getName(), new UserHandle()));
+            defaultExcluded.add("app://" + AppPojo.getComponentName(context.getPackageName(), MainActivity.class.getName(), UserHandle.OWNER));
             return defaultExcluded;
         }
     }
@@ -621,7 +620,7 @@ public class DataHandler extends BroadcastReceiver
             return new HashSet<>(excluded);
         } else {
             Set<String> defaultExcluded = new HashSet<>(1);
-            defaultExcluded.add(AppPojo.getComponentName(context.getPackageName(), MainActivity.class.getName(), new UserHandle()));
+            defaultExcluded.add(AppPojo.getComponentName(context.getPackageName(), MainActivity.class.getName(), UserHandle.OWNER));
             return defaultExcluded;
         }
     }

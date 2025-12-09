@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -15,6 +16,8 @@ import android.preference.PreferenceManager;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.text.style.UnderlineSpan;
 import android.util.Log;
 import android.util.Pair;
 import android.view.LayoutInflater;
@@ -33,8 +36,11 @@ import androidx.annotation.StringRes;
 import androidx.annotation.StyleableRes;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import fr.neamar.kiss.BuildConfig;
 import fr.neamar.kiss.KissApplication;
@@ -54,6 +60,7 @@ import fr.neamar.kiss.pojo.ShortcutPojo;
 import fr.neamar.kiss.pojo.TagDummyPojo;
 import fr.neamar.kiss.searcher.QueryInterface;
 import fr.neamar.kiss.ui.ListPopup;
+import fr.neamar.kiss.utils.ClipboardUtils;
 import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
 import fr.neamar.kiss.utils.fuzzy.MatchInfo;
 
@@ -65,7 +72,7 @@ public abstract class Result<T extends Pojo> {
     @NonNull
     protected final T pojo;
 
-    Result(@NonNull T pojo) {
+    protected Result(@NonNull T pojo) {
         this.pojo = pojo;
     }
 
@@ -118,22 +125,34 @@ public abstract class Result<T extends Pojo> {
         return favoriteView;
     }
 
-    void displayHighlighted(String text, List<Pair<Integer, Integer>> positions, TextView view, Context context) {
+    protected void displayHighlighted(String text, List<Pair<Integer, Integer>> positions, TextView view, Context context) {
         SpannableString enriched = new SpannableString(text);
-        int primaryColor = UIColors.getPrimaryColor(context);
+        Set<String> resultHighlighting = PreferenceManager.getDefaultSharedPreferences(context)
+                .getStringSet("pref-result-highlighting", Collections.singleton("color"));
 
-        for (Pair<Integer, Integer> position : positions) {
-            enriched.setSpan(
-                    new ForegroundColorSpan(primaryColor),
-                    position.first,
-                    position.second,
-                    Spannable.SPAN_INCLUSIVE_INCLUSIVE
-            );
+        if (!resultHighlighting.isEmpty()) {
+            int primaryColor = UIColors.getPrimaryColor(context);
+            int len = text.length();
+            for (Pair<Integer, Integer> position : positions) {
+                if (position.first <= len) {
+                    for (String highlight : resultHighlighting) {
+                        Object span = createSpan(highlight, primaryColor);
+                        if (span != null) {
+                            enriched.setSpan(
+                                    span,
+                                    position.first,
+                                    Math.min(position.second, len),
+                                    Spannable.SPAN_INCLUSIVE_INCLUSIVE
+                            );
+                        }
+                    }
+                }
+            }
         }
         view.setText(enriched);
     }
 
-    boolean displayHighlighted(StringNormalizer.Result normalized, String text, FuzzyScore fuzzyScore,
+    protected boolean displayHighlighted(StringNormalizer.Result normalized, String text, FuzzyScore fuzzyScore,
                                TextView view, Context context) {
         MatchInfo matchInfo = fuzzyScore.match(normalized.codePoints);
 
@@ -142,19 +161,46 @@ public abstract class Result<T extends Pojo> {
             return false;
         }
 
-        SpannableString enriched = new SpannableString(text);
-        int primaryColor = UIColors.getPrimaryColor(context);
-
-        for (Pair<Integer, Integer> position : matchInfo.getMatchedSequences()) {
-            enriched.setSpan(
-                    new ForegroundColorSpan(primaryColor),
-                    normalized.mapPosition(position.first),
-                    normalized.mapPosition(position.second),
-                    Spannable.SPAN_INCLUSIVE_INCLUSIVE
-            );
-        }
-        view.setText(enriched);
+        displayHighlighted(text, getMatchedSequences(matchInfo, normalized), view, context);
         return true;
+    }
+
+    private List<Pair<Integer, Integer>> getMatchedSequences(MatchInfo matchInfo, StringNormalizer.Result normalized) {
+        List<Integer> matchedIndices = matchInfo.getMatchedIndices();
+        if (matchedIndices == null) {
+            return Collections.emptyList();
+        }
+
+        // compute pair match indices
+        List<Pair<Integer, Integer>> positions = new ArrayList<>(matchedIndices.size());
+        int start = matchedIndices.get(0);
+        int end = start + 1;
+        for (int i = 1; i < matchedIndices.size(); i += 1) {
+            if (end == matchedIndices.get(i)) {
+                end += 1;
+            } else {
+                positions.add(new Pair<>(normalized.mapPosition(start), normalized.mapPosition(end)));
+                start = matchedIndices.get(i);
+                end = start + 1;
+            }
+        }
+        positions.add(new Pair<>(normalized.mapPosition(start), normalized.mapPosition(end)));
+        return positions;
+    }
+
+    private Object createSpan(String highlight, int primaryColor) {
+        switch (highlight) {
+            case "color":
+                return new ForegroundColorSpan(primaryColor);
+            case "bold":
+                return new StyleSpan(Typeface.BOLD);
+            case "italic":
+                return new StyleSpan(Typeface.ITALIC);
+            case "underline":
+                return new UnderlineSpan();
+            default:
+                return null;
+        }
     }
 
     public String getSection() {
@@ -181,8 +227,13 @@ public abstract class Result<T extends Pojo> {
         ListPopup menu = buildPopupMenu(context, popupMenuAdapter, parent, parentView);
 
         menu.setOnItemClickListener((adapter, view, position) -> {
-            @StringRes int stringId = ((ListPopup.Item) adapter.getItem(position)).stringId;
-            popupMenuClickHandler(view.getContext(), parent, stringId, parentView);
+            ListPopup.Item item = (ListPopup.Item) adapter.getItem(position);
+            @StringRes int stringId = item.stringId;
+            boolean handled = popupMenuClickHandler(view.getContext(), parent, stringId, parentView);
+            if (!handled && stringId == 0) {
+                ClipboardUtils.setClipboard(view.getContext(), "Copied Text", item.toString());
+                Toast.makeText(context, R.string.copy_confirmation, Toast.LENGTH_SHORT).show();
+            }
         });
 
         return menu;
@@ -228,6 +279,7 @@ public abstract class Result<T extends Pojo> {
 
         if (BuildConfig.DEBUG) {
             adapter.add(new ListPopup.Item("Relevance: " + pojo.relevance));
+            adapter.add(new ListPopup.Item("ID: " + pojo.getHistoryId()));
         }
 
         return menu;
@@ -245,17 +297,10 @@ public abstract class Result<T extends Pojo> {
             return true;
         } else if (stringId == R.string.menu_favorites_add) {
             launchAddToFavorites(context, pojo);
+            return true;
         } else if (stringId == R.string.menu_favorites_remove) {
             launchRemoveFromFavorites(context, pojo);
-        }
-
-        MainActivity mainActivity = (MainActivity) context;
-        // Update favorite bar
-        mainActivity.onFavoriteChange();
-        mainActivity.launchOccurred();
-        // Update Search to reflect favorite add, if the "exclude favorites" option is active
-        if (mainActivity.prefs.getBoolean("exclude-favorites-history", false) && mainActivity.isViewingSearchResults()) {
-            mainActivity.updateSearchRecords();
+            return true;
         }
 
         return false;
@@ -265,12 +310,27 @@ public abstract class Result<T extends Pojo> {
         String msg = context.getResources().getString(R.string.toast_favorites_added);
         KissApplication.getApplication(context).getDataHandler().addToFavorites(pojo.getFavoriteId());
         Toast.makeText(context, String.format(msg, pojo.getName()), Toast.LENGTH_SHORT).show();
+        favoritesChanged(context);
     }
 
     private void launchRemoveFromFavorites(Context context, Pojo pojo) {
         String msg = context.getResources().getString(R.string.toast_favorites_removed);
         KissApplication.getApplication(context).getDataHandler().removeFromFavorites(pojo.getFavoriteId());
         Toast.makeText(context, String.format(msg, pojo.getName()), Toast.LENGTH_SHORT).show();
+        favoritesChanged(context);
+    }
+
+    private void favoritesChanged(Context context) {
+        if (context instanceof MainActivity) {
+            MainActivity mainActivity = (MainActivity) context;
+            // Update favorite bar
+            mainActivity.onFavoriteChange();
+            mainActivity.launchOccurred();
+            // Update Search to reflect favorite add, if the "exclude favorites" option is active
+            if (mainActivity.prefs.getBoolean("exclude-favorites-history", false) && mainActivity.isViewingSearchResults()) {
+                mainActivity.updateSearchRecords();
+            }
+        }
     }
 
     /**

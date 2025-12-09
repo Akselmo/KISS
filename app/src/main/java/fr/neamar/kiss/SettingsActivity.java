@@ -134,6 +134,9 @@ public class SettingsActivity extends PreferenceActivity implements
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             removePreference("icons-section", DrawableUtils.KEY_THEMED_ICONS);
         }
+        if (Build.VERSION.SDK_INT >=Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            removePreference("colors-section", "notification-bar-color");
+        }
         if (!ShortcutUtil.canDeviceShowShortcuts()) {
             removePreference("exclude_apps_category", "reset-excluded-app-shortcuts");
             removePreference("search-providers", "enable-shortcuts");
@@ -563,7 +566,6 @@ public class SettingsActivity extends PreferenceActivity implements
         return multiPreference;
     }
 
-    @SuppressWarnings("StringSplitter")
     private void addDefaultSearchProvider(final SharedPreferences prefs) {
         ListPreference standardPref = new ListPreference(this);
 
@@ -762,7 +764,6 @@ public class SettingsActivity extends PreferenceActivity implements
         // Enable the preference
         runOnUiThread(() -> {
             selectListPreference.setEnabled(true);
-            selectListPreference.setTitle(R.string.pref_toggle_tags_select);
         });
     }
 
@@ -786,7 +787,6 @@ public class SettingsActivity extends PreferenceActivity implements
         // Enable the preference
         runOnUiThread(() -> {
             selectListPreference.setEnabled(true);
-            selectListPreference.setTitle(R.string.pref_fav_tags_select);
         });
     }
 

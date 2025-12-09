@@ -105,7 +105,7 @@
             android:defaultValue="@array/favTagsDefault"
             android:enabled="false"
             android:key="pref-fav-tags-list"
-            android:title="@string/loading" />
+            android:title="@string/pref_fav_tags_select" />
     </PreferenceScreen>
     <PreferenceScreen
         android:key="ui-holder"
@@ -269,6 +269,13 @@
                 android:defaultValue="false"
                 android:key="large-result-list-margins"
                 android:title="@string/large_result_list_margins" />
+            <MultiSelectListPreference
+                android:defaultValue="@array/resultHighlightingDefault"
+                android:entries="@array/resultHighlightingEntries"
+                android:entryValues="@array/resultHighlightingValues"
+                android:key="pref-result-highlighting"
+                android:title="@string/pref_result_highlighting"
+                android:summary="@string/pref_result_highlighting_summary"/>
         </PreferenceCategory>
     </PreferenceScreen>
     <PreferenceScreen
@@ -390,7 +397,7 @@
                     android:defaultValue="@array/toggleTagsDefault"
                     android:enabled="false"
                     android:key="pref-toggle-tags-list"
-                    android:title="@string/loading" />
+                    android:title="@string/pref_toggle_tags_select" />
             </PreferenceScreen>
             <ListPreference
                 android:entries="@array/taggedResultSortModeEntries"
@@ -529,8 +536,8 @@
             android:title="@string/contact_mime_types_title" />
         <fr.neamar.kiss.preference.SwitchPreference
             android:defaultValue="false"
-            android:key="use-fuzzy-score-v2"
-            android:title="Use fuzzy search algorithm V2 (experimental)" />
+            android:key="use-fuzzy-score-v1"
+            android:title="Use legacy fuzzy search algorithm" />
         <fr.neamar.kiss.preference.RootModeSwitch
             android:defaultValue="false"
             android:key="root-mode"

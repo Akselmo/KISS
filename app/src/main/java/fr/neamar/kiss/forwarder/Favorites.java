@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.ContactsContract;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.DragEvent;
 import android.view.HapticFeedbackConstants;
@@ -197,7 +198,7 @@ public class Favorites extends Forwarder implements View.OnClickListener, View.O
     }
 
     void updateSearchRecords(String query) {
-        if (query.isEmpty()) {
+        if (TextUtils.isEmpty(query)) {
             mainActivity.favoritesBar.setVisibility(View.VISIBLE);
         } else {
             mainActivity.favoritesBar.setVisibility(View.GONE);
@@ -400,7 +401,7 @@ public class Favorites extends Forwarder implements View.OnClickListener, View.O
     @Nullable
     private ComponentName getLaunchingComponent(Intent intent) {
         ComponentName componentName = PackageManagerUtils.getComponentName(mainActivity, intent);
-        ComponentName launchingComponent = PackageManagerUtils.getLaunchingComponent(mainActivity, componentName, new UserHandle());
+        ComponentName launchingComponent = PackageManagerUtils.getLaunchingComponent(mainActivity, componentName, UserHandle.OWNER);
         if (launchingComponent != null && !launchingComponent.getClassName().equals(DEFAULT_RESOLVER)) {
             return launchingComponent;
         }

@@ -255,11 +255,7 @@ public class IconsHandler {
             }
         } else if (DrawableUtils.isAdaptiveIconDrawable(drawable) || mForceAdaptive) {
             // use adaptive shape (with white background for non adaptive icons)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Resources.getSystem().getColor(android.R.color.system_accent1_700));
-            } else {
-                return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Color.BLACK);
-            }
+            return mSystemPack.applyBackgroundAndMask(ctx, drawable, true, Color.BLACK);
         } else if (mForceShape) {
             // use adaptive shape
             return mSystemPack.applyBackgroundAndMask(ctx, drawable, false, Color.TRANSPARENT);
@@ -359,7 +355,7 @@ public class IconsHandler {
 
         for (ResolveInfo ri : launcherThemes) {
             String packageName = ri.activityInfo.packageName;
-            String name = PackageManagerUtils.getLabel(ctx, packageName, new UserHandle());
+            String name = PackageManagerUtils.getLabel(ctx, packageName, UserHandle.OWNER);
             if (name != null) {
                 iconsPacks.put(packageName, name);
             } else {

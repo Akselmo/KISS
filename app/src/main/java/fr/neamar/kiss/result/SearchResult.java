@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
 import android.view.View;
@@ -30,9 +31,8 @@ import fr.neamar.kiss.adapter.RecordAdapter;
 import fr.neamar.kiss.pojo.SearchPojo;
 import fr.neamar.kiss.ui.ListPopup;
 import fr.neamar.kiss.utils.ClipboardUtils;
-import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
 import fr.neamar.kiss.utils.PackageManagerUtils;
-import fr.neamar.kiss.utils.UserHandle;
+import fr.neamar.kiss.utils.fuzzy.FuzzyScore;
 
 public class SearchResult extends Result<SearchPojo> {
 
@@ -67,6 +67,12 @@ public class SearchResult extends Result<SearchPojo> {
                 len = this.pojo.getName().length();
                 if (!hideIcons) {
                     image.setImageResource(R.drawable.ic_public);
+                    Intent intent = createSearchQueryIntent();
+                    Drawable icon = getIconByIntent(context, intent);
+                    if (icon != null) {
+                        image.setImageDrawable(icon);
+                        hasCustomIcon = true;
+                    }
                 }
                 break;
             case SEARCH_QUERY:
@@ -75,24 +81,6 @@ public class SearchResult extends Result<SearchPojo> {
                 len = pojo.query.length();
                 if (!hideIcons) {
                     image.setImageResource(R.drawable.search);
-                }
-
-                if (isGoogleSearch() && !hideIcons) {
-                    Drawable icon = getIconByPackageName(context, "com.google.android.googlequicksearchbox");
-                    if (icon != null) {
-                        image.setImageDrawable(icon);
-                        hasCustomIcon = true;
-                    }
-                }
-                if (isDuckDuckGo() && !hideIcons) {
-                    Drawable icon = getIconByPackageName(context, "com.duckduckgo.mobile.android");
-                    if (icon != null) {
-                        image.setImageDrawable(icon);
-                        hasCustomIcon = true;
-                    }
-                }
-
-                if (!hasCustomIcon && !hideIcons) {
                     Intent intent = createSearchQueryIntent();
                     Drawable icon = getIconByIntent(context, intent);
                     if (icon != null) {
@@ -115,7 +103,7 @@ public class SearchResult extends Result<SearchPojo> {
                 len = pojo.query.length();
                 if (!hideIcons) {
                     image.setImageResource(R.drawable.ic_public);
-                    Intent intent = createSearchQueryIntent();
+                    Intent intent = createUriQueryIntent();
                     Drawable icon = getIconByIntent(context, intent);
                     if (icon != null) {
                         image.setImageDrawable(icon);
@@ -153,15 +141,22 @@ public class SearchResult extends Result<SearchPojo> {
      * @return intent
      */
     private Intent createSearchQueryIntent() {
-        String query;
-        try {
-            query = URLEncoder.encode(pojo.query, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            query = URLEncoder.encode(pojo.query);
+        if (TextUtils.isEmpty(pojo.url) || "%s".equals(pojo.url)) {
+            Intent intent = new Intent(Intent.ACTION_WEB_SEARCH);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.putExtra(SearchManager.QUERY, pojo.query); // query contains search string
+            return intent;
+        } else {
+            String query;
+            try {
+                query = URLEncoder.encode(pojo.query, "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                query = URLEncoder.encode(pojo.query);
+            }
+            String urlWithQuery = pojo.url.replaceAll("%s|\\{q\\}", query);
+            Uri uri = Uri.parse(urlWithQuery);
+            return PackageManagerUtils.createUriIntent(uri);
         }
-        String urlWithQuery = pojo.url.replaceAll("%s|\\{q\\}", query);
-        Uri uri = Uri.parse(urlWithQuery);
-        return PackageManagerUtils.createUriIntent(uri);
     }
 
     /**
@@ -172,24 +167,8 @@ public class SearchResult extends Result<SearchPojo> {
     private Drawable getIconByIntent(Context context, Intent intent) {
         ComponentName componentName = PackageManagerUtils.getComponentName(context, intent);
         if (componentName != null) {
-            UserHandle userHandle = new UserHandle();
             IconsHandler iconsHandler = KissApplication.getApplication(context).getIconsHandler();
-            return iconsHandler.getDrawableIconForPackage(PackageManagerUtils.getLaunchingComponent(context, componentName, userHandle), userHandle);
-        }
-        return null;
-    }
-
-    /**
-     * @param context
-     * @param packageName
-     * @return icon, of best matching app for given package name
-     */
-    private Drawable getIconByPackageName(Context context, String packageName) {
-        UserHandle userHandle = new UserHandle();
-        ComponentName componentName = PackageManagerUtils.getLaunchingComponent(context, packageName, userHandle);
-        if (componentName != null) {
-            IconsHandler iconsHandler = KissApplication.getApplication(context).getIconsHandler();
-            return iconsHandler.getDrawableIconForPackage(PackageManagerUtils.getLaunchingComponent(context, componentName, userHandle), userHandle);
+            return iconsHandler.getDrawableIconForPackage(PackageManagerUtils.getLaunchingComponent(context, componentName, pojo.getUserHandle()), pojo.getUserHandle());
         }
         return null;
     }
@@ -199,18 +178,6 @@ public class SearchResult extends Result<SearchPojo> {
         switch (pojo.type) {
             case URL_QUERY:
             case SEARCH_QUERY:
-                if (isGoogleSearch()) {
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_WEB_SEARCH);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra(SearchManager.QUERY, pojo.query); // query contains search string
-                        setSourceBounds(intent, v);
-                        context.startActivity(intent);
-                        break;
-                    } catch (ActivityNotFoundException e) {
-                        // Google app not found, fall back to default method
-                    }
-                }
                 Intent search = createSearchQueryIntent();
                 setSourceBounds(search, v);
                 try {
@@ -255,13 +222,5 @@ public class SearchResult extends Result<SearchPojo> {
         }
 
         return super.popupMenuClickHandler(context, parent, stringId, parentView);
-    }
-
-    private boolean isGoogleSearch() {
-        return pojo.url.startsWith("https://encrypted.google.com");
-    }
-
-    private boolean isDuckDuckGo() {
-        return pojo.url.startsWith("https://start.duckduckgo.com");
     }
 }

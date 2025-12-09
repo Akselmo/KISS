@@ -13,12 +13,14 @@ import androidx.annotation.RequiresApi;
 /**
  * Wrapper class for `android.os.UserHandle` that works with all Android versions
  */
-public class UserHandle implements Parcelable {
+public class UserHandle implements Parcelable, Comparable<UserHandle> {
     private static final String TAG = UserHandle.class.getSimpleName();
     private final long serial;
     private final Parcelable handle; // android.os.UserHandle on Android 4.2 and newer
 
-    public UserHandle() {
+    public static UserHandle OWNER = new UserHandle();
+
+    private UserHandle() {
         this(0, null);
     }
 
@@ -39,14 +41,24 @@ public class UserHandle implements Parcelable {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
     public UserHandle(Context context, android.os.UserHandle userHandle) {
-        final UserManager manager = (UserManager) context.getSystemService(Context.USER_SERVICE);
-        assert manager != null;
-        serial = manager.getSerialNumberForUser(userHandle);
-        handle = userHandle;
+        if (android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            // OS does not provide any APIs for multi-user support
+            this.serial = 0;
+            this.handle = null;
+        } else if (userHandle != null && Process.myUserHandle().equals(userHandle)) {
+            // For easier processing the current user is also stored as `null`, even
+            // if there is multi-user support
+            this.serial = 0;
+            this.handle = null;
+        } else {
+            final UserManager manager = (UserManager) context.getSystemService(Context.USER_SERVICE);
+            assert manager != null;
+            // Store the given user handle
+            this.serial = manager.getSerialNumberForUser(userHandle);
+            this.handle = userHandle;
+        }
     }
-
 
     protected UserHandle(Parcel in) {
         serial = in.readLong();
@@ -119,5 +131,14 @@ public class UserHandle implements Parcelable {
         }
 
         return (serial == this.serial);
+    }
+
+
+    @Override
+    public int compareTo(UserHandle that) {
+        if (this == that)
+            return 0;
+
+        return Long.compare(this.serial, that.serial);
     }
 }
